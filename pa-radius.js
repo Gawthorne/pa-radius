@@ -18,40 +18,53 @@ var reqNo = 0;
 
 var server = dgram.createSocket("udp4");
 
-function mapUserIp(user,ip,callback){
-	reqNo++;
+function mapUserIp(id,user,ip,callback){
 	var query = querystring.stringify({ 
 		type: 'user-id',
 		action: 'set',
 		key: config.firewall.apiKey,
-		cmd: '<uid-message><version>2.0</version><type>update</type><payload><login><entry name="'+config.user.domain+'\\'+user+'" ip="'+ip+'" timeout="'+config.user.timeout+'"></entry></login></payload></uid-message>'
+		cmd: '<uid-message>\n\
+		<version>2.0</version>\n\
+		<type>update</type>\n\
+		<payload>\n\
+		<login>\n\
+		<entry name="'+config.user.domain+'\\'+user+'" ip="'+ip+'" timeout="'+config.user.timeout+'"/>\n\
+		</login>\n\
+		</payload>\n\
+		</uid-message>'
 	});
 	var options = {
 		host: config.firewall.host,
 		path: '/api/?'+query
 	};
+	var time = Date.now();
 	var req = https.get(options, function(res) {
 		var buffer = "";
 		res.on("data", function(data){
 			buffer = buffer+data;
 		});
 		res.on("end", function(data){
+			var latency = (Date.now()-time);
 			if(res.statusCode == 200){
 				if(buffer.indexOf('status="success"') != -1){
-					callback(res.statusCode,user,ip,reqNo);
+					callback(user,ip,id,latency);
 				}else{
-					console.log(reqNo,'Firewall returned 200 but was not successful',user,ip);
-					console.log(buffer);
+					console.log(id,'Firewall returned HTTP 200 however an error was thrown',user,ip);
+					if(config.debug)
+						console.log(buffer);
 				}
 			}else{
-				console.log(reqNo, buffer);
+				console.log(id, buffer);
 			}
 		});
 	});
-	req.setTimeout(2000,function () {
+	// Set timeout to 6 minutes, a bandaid fix which seems to be in version 7.1.3
+	req.setTimeout(360000,function () {
+		console.log(new Date().toLocaleString(),' Request to firewall timed out:',user,ip,id);
+		if(config.debug)
+			console.log(req);
 		req.abort();
-		console.log("\007");
-		console.log(new Date().toLocaleString(),' Request to firewall timed out:',user,ip,reqNo);
+		//console.log("\007");
 	});
 	req.on('error', function(e) {
 		console.log('ERROR: ' + e.message);
@@ -73,7 +86,8 @@ server.on("message", function (msg, rinfo){
 	mac = packet.attributes['Calling-Station-Id'];
 
 	if(ip == undefined){
-		console.log('Client does not have a valid IP. Dropping request.',username, mac);
+		if(config.debug)
+			console.log('Client does not have a valid IP. Dropping request.',username, mac);
 		return;
 	}
 	
@@ -85,7 +99,8 @@ server.on("message", function (msg, rinfo){
 	});
 	config.user.ignored.forEach((v, k) => {
 		if(username.indexOf(v) != -1){
-			console.log('User is in ignored users list: '+username);
+			if(config.debug)
+				console.log('User is in ignored users list: '+username);
 			ignored = true;
 			return;
 		}
@@ -95,29 +110,31 @@ server.on("message", function (msg, rinfo){
 		switch(packet.attributes['Acct-Status-Type']){
 			case 'Start': 
 				// Send info to PA on every start RADIUS message
-				mapUserIp(username,ip, function(code,user,ip,id){
-					console.log(id+' (Response: '+code+') '+packet.attributes['Acct-Status-Type']+' from '+ap_ip+': '+user,ip);
+				reqNo++;
+				mapUserIp(reqNo,username,ip, function(user,ip,id,lat){
+					console.log('(%d) (%dms) %s from %s: %s %s',id,lat,packet.attributes['Acct-Status-Type'],ap_ip,user,ip);
 				});
 				break;
-			
 			case 'Interim-Update':
 				// Only parse every nth interim-update for each user.
 				if(config.firewall.apiThrottle != 0){
 					if(users[ip] == undefined)
 						users[ip] = [username,0];
-					if(users[ip][1] < 10) {
+					if(users[ip][1] < config.firewall.apiThrottle) {
 						users[ip][1]++;
-						//console.log('Ignoring update request, will send after '+(10 - users[ip][1])+' more requests.',username,ip);
+						var reqsLeft = config.firewall.apiThrottle - users[ip][1];
+						if(config.debug)
+							console.log('Ignoring update request, will send after %d more requests: %s %s',reqsLeft,username,ip)
 						break;
 					}
 				}
-				mapUserIp(username,ip, function(code,user,ip,id){
-					console.log(id+' (Response: '+code+') '+packet.attributes['Acct-Status-Type']+' from '+ap_ip+': '+user,ip);
+				reqNo++;
+				mapUserIp(reqNo,username,ip, function(user,ip,id,lat){
+					console.log('(%d) (%dms) %s from %s: %s %s',id,lat,packet.attributes['Acct-Status-Type'],ap_ip,user,ip);
 					if(config.firewall.apiThrottle != 0)
 						users[ip][1] = 0;
 				});
 				break;
-				
 			case 'Stop':
 				// Don't send any info to the Palo Alto firewall when receiving stop messages.
 				// After the timeout configured in the GET request has passed, the IP to user mapping will clear.
@@ -141,7 +158,7 @@ server.on("message", function (msg, rinfo){
 
 server.on("listening", function () {
 	var address = server.address();
-	console.log("PA Radius server listening "+address.address+":"+address.port);
+	console.log("PA RADIUS server listening "+address.address+":"+address.port);
 });
 
 server.bind(1813);

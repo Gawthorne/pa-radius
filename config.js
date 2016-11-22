@@ -22,4 +22,7 @@ config.user.domain = process.env.PAR_DOMAIN || '';
 //Ignore certificate errors. Comment line out if using a valid certificate.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
+//Enable debug messages (ignored users, invalid IP's, HTTP responses)
+config.debug = false;
+
 module.exports = config;
