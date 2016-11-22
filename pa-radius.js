@@ -72,9 +72,13 @@ function mapUserIp(id,user,ip,callback){
 }
 
 server.on("message", function (msg, rinfo){
+	if(config.radius.nas.length > 0 && config.radius.nas.indexOf(rinfo.address) == -1){
+		if(config.debug)
+			console.log('Rejected accounting request from: %s',rinfo.address);
+		return;
+	}
 	var username, packet, ip, mac, ap_ip;
 	packet = radius.decode({packet: msg, secret: config.radius.secret});
-	
 	if(packet.code != 'Accounting-Request'){ // Ignore other RADIUS messages
 		console.log('Unsupported packet type: ' + packet.code);
 		return;

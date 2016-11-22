@@ -13,6 +13,9 @@ config.firewall.apiKey = process.env.PAR_API_KEY || 'apikey';
 config.firewall.apiThrottle = 0;
 
 config.radius.secret = process.env.PAR_SECRET || 'secret';
+// Add your NAS's here (Where the accounting messages are coming from, switch, AP, RADIUS server, etc)
+// Leave empty to disable IP check
+config.radius.nas = process.env.PAR_NAS || [];
 
 config.user.timeout = 120;
 config.user.ignored = (process.env.PAR_IGNORED.split(',').length > 0) ? process.env.PAR_IGNORED.split(',') : [];
