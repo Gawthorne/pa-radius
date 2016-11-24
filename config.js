@@ -3,10 +3,14 @@ var config = {};
 config.firewall = {};
 config.radius = {};
 config.user = {};
-
+config.wmi = {};
 
 config.firewall.host = process.env.PAR_HOST || 'hostnameorip';
 config.firewall.apiKey = process.env.PAR_API_KEY || 'apikey';
+
+config.wmi.enabled = true;
+config.wmi.username = process.env.PAR_USER || 'username'; 
+config.wmi.password = process.env.PAR_PASS || 'password';
 
 // Parse every nth interim-update for each user.
 // Each user has it's own counter. Set 0 to disable.
