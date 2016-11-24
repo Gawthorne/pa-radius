@@ -3,8 +3,10 @@
 RADIUS accounting packet parser to Palo Alto User-to-IP mapping.
 
 Receives accounting messages directly from a NAS (Switch, AP, etc) or forwarded from another RADIUS server.  
-Decodes radius packet and pulls relevant information. Supports querying domain computers via WMI to get the currently logged on user.  
-Once the user and IP has been discovered a GET request is sent directly to the Palo Alto Firewall using the PAN-OS XML API.
+Decodes the RADIUS accounting packet and grabs user information. Once the user and IP has been discovered a  
+GET request is sent directly to the Palo Alto Firewall using the PAN-OS XML API.
+
+Supports querying domain computers via WMI to get the currently logged on user.  
 
 ## Installation
 
@@ -16,10 +18,10 @@ npm install radius
 npm install wmi-client
 ```
 
-Once they are both installed, modify the config template `config.js` to match your setup and launch pa-radius: `node pa-radius`
+Modify the config template `config.js`. To run pa-radius, run `node pa-radius` while in it's directory.
 
-You can find more information about node-radius and wmi-client on their GitHub page:  
-[node-radius](https://github.com/retailnext/node-radius)  
-[wmi-client](https://github.com/R-Vision/wmi-client)  
+You can also find node-radius and wmi-client on their GitHub pages:  
+*[node-radius](https://github.com/retailnext/node-radius)  
+*[wmi-client](https://github.com/R-Vision/wmi-client)  
 
 
