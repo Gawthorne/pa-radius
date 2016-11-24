@@ -21,7 +21,7 @@ npm install wmi-client
 Modify the config template `config.js`. To run pa-radius, run `node pa-radius` while in it's directory.
 
 You can also find node-radius and wmi-client on their GitHub pages:  
-*[node-radius](https://github.com/retailnext/node-radius)  
-*[wmi-client](https://github.com/R-Vision/wmi-client)  
+* [node-radius](https://github.com/retailnext/node-radius)  
+* [wmi-client](https://github.com/R-Vision/wmi-client)  
 
 
