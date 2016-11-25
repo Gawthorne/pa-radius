@@ -11,12 +11,10 @@ Supports querying domain computers via WMI to get the currently logged on user.
 ## Installation
 
 This script has been wrote with [Node.js](https://nodejs.org) so you'll need to grab that.  
-You will need to install the following dependancies. All are available from npm which is bundled with Node.js. 
+You will need to install three dependancies. All are available from npm which is bundled with Node.js.  
 Assuming the location of npm is within your PATH, run the following commands in the same directory as pa-radius to install the dependancies:  
 ```
-npm install radius
-npm install wmi-client
-npm install winston
+npm install radius wmi-client winston
 ```
 
 Modify the config template `config.js` before running.  
