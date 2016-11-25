@@ -12,14 +12,23 @@ var radius = require('radius');
 var dgram = require("dgram");
 var querystring = require('querystring');
 var https = require('https');
-var WmiClient = require('wmi-client');
+var wmiclient = require('wmi-client');
+var winston = require('winston');
 var config = require('./config');
 
 var users = []; // Users array for throttling interim-updates
 var reqNo = 0;
 
 var server = dgram.createSocket("udp4");
-
+var logger = new (winston.Logger)({
+	transports: [
+		new (winston.transports.Console)({ level: 'error' }),
+		new (winston.transports.File)({
+			filename: config.log.file,
+			level: config.log.level
+		})
+	]
+});
 
 function processRequest(type,username,ip,nas){
 	switch(type){
@@ -27,7 +36,7 @@ function processRequest(type,username,ip,nas){
 			// Send info to PA on every start RADIUS message
 			reqNo++;
 			mapUserIp(reqNo,username,ip, function(user,ip,id,lat){
-				console.log('(%d) (%dms) %s from %s: %s %s',id,lat,type,nas,user,ip);
+				logger.log('info','(%d) (%dms) %s from %s: %s %s',id,lat,type,nas,user,ip);
 			});
 			break;
 		case 'Interim-Update':
@@ -38,14 +47,13 @@ function processRequest(type,username,ip,nas){
 				if(users[ip][1] < config.firewall.apiThrottle) {
 					users[ip][1]++;
 					var reqsLeft = config.firewall.apiThrottle - users[ip][1];
-					//if(config.debug)
-						console.log('Ignoring update request, will send after %d more requests: %s %s',reqsLeft,username,ip)
+					logger.log('verbose','Ignoring update request, will send after %d more requests: %s %s',reqsLeft,username,ip)
 					break;
 				}
 			}
 			reqNo++;
 			mapUserIp(reqNo,username,ip, function(user,ip,id,lat){
-				console.log('(%d) (%dms) %s from %s: %s %s',id,lat,type,nas,user,ip);
+				logger.log('info','(%d) (%dms) %s from %s: %s %s',id,lat,type,nas,user,ip);
 				if(config.firewall.apiThrottle != 0)
 					users[ip][1] = 0;
 			});
@@ -55,7 +63,7 @@ function processRequest(type,username,ip,nas){
 			// After the timeout configured in the GET request has passed, the IP to user mapping will clear.
 			break;
 		default:
-			console.log('Status type not supported: ' + type);
+			logger.log('debug','Status type not supported:',type);
 	}
 }
 // returns username if user is not within ignored users list
@@ -69,8 +77,7 @@ function filterUser(username){
 		});
 		config.user.ignored.forEach((v, k) => {
 			if(username.indexOf(v) != -1){
-				if(config.debug)
-					console.log('User is in ignored users list: '+username);
+				logger.log('verbose','User is in ignored users list: '+username);
 				ignored = true;
 				return;
 			}
@@ -110,37 +117,35 @@ function mapUserIp(id,user,ip,callback){
 				if(buffer.indexOf('status="success"') != -1){
 					callback(user,ip,id,latency);
 				}else{
-					console.log(id,'Firewall returned HTTP 200 however an error was thrown',user,ip);
-					console.log(buffer);
+					logger.log('info','(%d) (%dms) Firewall returned HTTP 200 however an error was thrown',id,latency,user,ip);
+					logger.log('verbose',buffer);
 				}
 			}else{
-				console.log(id, buffer);
+				logger.log('verbose', buffer);
 			}
 		});
 	});
 	// Set timeout to 6 minutes, a bandaid fix for a bug which seems to be in version 7.1.5
 	req.setTimeout(360000,function () {
-		console.log(new Date().toLocaleString(),' Request to firewall timed out:',user,ip,id);
-		if(config.debug)
-			console.log(req);
+		logger.log('error','(%d) Request to firewall timed out:',id,user,ip);
+		logger.log('verbose',req);
 		req.abort();
 		//console.log("\007");
 	});
 	req.on('error', function(e) {
-		console.log('ERROR: ' + e.message);
+		logger.log('error','API request to firewall failed.',e.message);
 	});
 }
 
 server.on("message", function (msg, rinfo){
 	if(config.radius.nas.length > 0 && config.radius.nas.indexOf(rinfo.address) == -1){
-		if(config.debug)
-			console.log('Rejected accounting request from: %s',rinfo.address);
+		logger.log('verbose','Rejected accounting request from:',rinfo.address);
 		return;
 	}
 	var username, packet, ip, mac, ap_ip;
 	packet = radius.decode({packet: msg, secret: config.radius.secret});
 	if(packet.code != 'Accounting-Request'){ // Ignore other RADIUS messages
-		console.log('Unsupported packet type: ' + packet.code);
+		logger.log('debug','Unsupported packet type from %s:',packet.attributes['NAS-IP-Address'],packet.code);
 		return;
 	}
 	
@@ -150,8 +155,7 @@ server.on("message", function (msg, rinfo){
 	mac = packet.attributes['Calling-Station-Id'];
 
 	if(ip == undefined){
-		if(config.debug)
-			console.log('Client does not have a valid IP. Dropping request.',username, mac);
+		logger.log('verbose','Client does not have a valid IP. Dropping request.',username, mac);
 		return;
 	}
 	
@@ -160,7 +164,7 @@ server.on("message", function (msg, rinfo){
 		if(config.wmi.enabled){
 			var time = Date.now();
 			// Send a WMI query to the machine and retrieve the logged in user - Drop request if user not logged in yet (UserName == NULL)
-			var wmi = new WmiClient({
+			var wmi = new wmiclient({
 				username: config.wmi.username,
 				password: config.wmi.password,
 				host: ip
@@ -168,14 +172,13 @@ server.on("message", function (msg, rinfo){
 			wmi.query('SELECT Username,Name FROM Win32_ComputerSystem', function (err, result) {
 				if(err == null){
 					var latency = (Date.now()-time);
-					//console.log('(%dms) WMI query to %s resulted in: %s',latency,username,result[0]['UserName']);
+					logger.log('verbose','(%dms) WMI query to %s resulted in: %s',latency,username,result[0]['UserName']);
 					username = filterUser(result[0]['UserName']);
 					if(typeof(username) == 'string'){
 						processRequest(packet.attributes['Acct-Status-Type'],username,ip,nas);
 					}
 				}else{
-					if(config.debug)
-						console.log('WMI Query failed for machine %s. %s',username,err);
+					logger.log('verbose','WMI Query failed for machine %s. %s',username,err);
 					return;
 				}
 			});
@@ -194,14 +197,15 @@ server.on("message", function (msg, rinfo){
 	});
 	server.send(response, 0, response.length, rinfo.port, rinfo.address, function(err, bytes) {
 		if (err) {
-		  console.log('Error sending response to ', rinfo);
+		  logger.log('error','Error sending accounting response to ', rinfo);
 		}
 	});
 });
 
 server.on("listening", function () {
 	var address = server.address();
-	console.log("PA RADIUS server listening "+address.address+":"+address.port);
+	logger.log('info','PA RADIUS server listening %s:%d',address.address,address.port);
+	console.log('PA RADIUS server listening %s:%d',address.address,address.port);
 });
 
 server.bind(1813);

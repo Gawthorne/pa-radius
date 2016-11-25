@@ -4,6 +4,7 @@ config.firewall = {};
 config.radius = {};
 config.user = {};
 config.wmi = {};
+config.log = {};
 
 config.firewall.host = process.env.PAR_HOST || 'hostnameorip';
 config.firewall.apiKey = process.env.PAR_API_KEY || 'apikey';
@@ -26,10 +27,13 @@ config.user.ignored = (process.env.PAR_IGNORED.split(',').length > 0) ? process.
 config.user.strip = (process.env.PAR_STRIP.split(',').length > 0) ? process.env.PAR_STRIP.split(',') : [];
 config.user.domain = process.env.PAR_DOMAIN || '';
 
+// Logging levels are: { error: 0, warn: 1, info: 2, verbose: 3, debug: 4, silly: 5 }
+
+config.log.level = 'info';
+config.log.file = 'pa-radius.log';
+
 //Ignore certificate errors. Comment line out if using a valid certificate.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-//Enable debug messages (ignored users, invalid IP's, HTTP responses)
-config.debug = false;
 
 module.exports = config;
