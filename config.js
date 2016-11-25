@@ -31,6 +31,7 @@ config.user.domain = process.env.PAR_DOMAIN || '';
 
 config.log.level = 'info';
 config.log.file = 'pa-radius.log';
+config.log.console = true; // Set to false to only display errors to console
 
 //Ignore certificate errors. Comment line out if using a valid certificate.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";

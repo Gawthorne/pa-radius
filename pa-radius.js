@@ -22,7 +22,7 @@ var reqNo = 0;
 var server = dgram.createSocket("udp4");
 var logger = new (winston.Logger)({
 	transports: [
-		new (winston.transports.Console)({ level: 'error' }),
+		new (winston.transports.Console)({ level: (config.log.console ? config.log.level : 'error') }),
 		new (winston.transports.File)({
 			filename: config.log.file,
 			level: config.log.level
